@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -38,16 +39,36 @@ func metricsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// requestLogger emits one structured log line per request.
+func requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		next.ServeHTTP(wrapped, r)
+
+		slog.Info("http request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", wrapped.statusCode,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"remote", r.RemoteAddr,
+		)
+	})
+}
+
 func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(metricsMiddleware)
-	r.Use(middleware.Logger)
+	r.Use(requestLogger)
 
 	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 	r.Get("/health", h.HealthCheck)
+	r.Get("/healthz", h.Liveness)
+	r.Get("/readyz", h.Readiness)
 
 	r.Post("/api/url", h.CreateURL)
 	r.Get("/api/urls", h.ListURLs)

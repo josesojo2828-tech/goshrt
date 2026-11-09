@@ -41,9 +41,21 @@ type Service struct {
 
 func New(store Store, cache Cache) *Service {
 	return &Service{
-		store:  store,
-		cache:  cache,
+		store: store,
+		cache: cache,
 	}
+}
+
+// Ready reports whether every downstream dependency is reachable.
+// It is used by the readiness probe to keep traffic away from an unhealthy instance.
+func (s *Service) Ready(ctx context.Context) error {
+	if err := s.store.Ping(ctx); err != nil {
+		return fmt.Errorf("postgres: %w", err)
+	}
+	if err := s.cache.Ping(ctx); err != nil {
+		return fmt.Errorf("redis: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) CreateURL(ctx context.Context, originalURL string, customAlias string, ttl time.Duration) (*store.URL, error) {

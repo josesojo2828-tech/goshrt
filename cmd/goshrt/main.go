@@ -2,33 +2,48 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/jsojo/goshrt/internal/config"
 	"github.com/jsojo/goshrt/internal/handler"
+	"github.com/jsojo/goshrt/internal/metrics"
 	"github.com/jsojo/goshrt/internal/service"
 	"github.com/jsojo/goshrt/internal/store/postgres"
 	"github.com/jsojo/goshrt/internal/store/redis"
 	"github.com/jsojo/goshrt/internal/worker"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
+	metrics.BuildInfo.WithLabelValues(version, commit, runtime.Version()).Set(1)
+
 	cfg := config.Load()
 
 	pgStore, err := postgres.NewStore(cfg.PostgresDSN)
 	if err != nil {
-		log.Fatalf("connecting to postgres: %v", err)
+		slog.Error("connecting to postgres", "error", err)
+		os.Exit(1)
 	}
 	defer pgStore.Close()
 
 	redisCache, err := redis.NewCache(cfg.RedisAddr, cfg.RedisPassword)
 	if err != nil {
-		log.Fatalf("connecting to redis: %v", err)
+		slog.Error("connecting to redis", "error", err)
+		os.Exit(1)
 	}
 	defer redisCache.Close()
 
@@ -37,9 +52,9 @@ func main() {
 	ctx := context.Background()
 	count, err := svc.SeedCache(ctx)
 	if err != nil {
-		log.Printf("warning: cache seed: %v", err)
+		slog.Warn("cache seed failed", "error", err)
 	} else {
-		log.Printf("seeded %d URLs to cache", count)
+		slog.Info("cache seeded", "urls", count)
 	}
 
 	clickWorker := worker.New(svc, cfg.ClickSyncInterval)
@@ -61,7 +76,7 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		log.Println("shutting down...")
+		slog.Info("shutting down")
 		clickWorker.Stop()
 		cancel()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -69,8 +84,9 @@ func main() {
 		srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("goshrt listening on %s", addr)
+	slog.Info("goshrt listening", "addr", addr)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("server error: %v", err)
+		slog.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

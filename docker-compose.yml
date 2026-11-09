@@ -22,7 +22,7 @@ services:
       - goshrt-network
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     container_name: goshrt_prometheus
     ports:
       - "15051:9090"
@@ -36,7 +36,7 @@ services:
       - goshrt-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6.0
     container_name: goshrt_grafana
     ports:
       - "15052:3000"
@@ -68,7 +68,11 @@ services:
     restart: on-failure
 
   goshrt:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${GOSHRT_VERSION:-dev}
+        COMMIT: ${GOSHRT_COMMIT:-none}
     container_name: goshrt_service
     ports:
       - "15050:8080"
@@ -82,7 +86,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/readyz || exit 1"]
     networks:
       - goshrt-network
 

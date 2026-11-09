@@ -74,4 +74,12 @@ var (
 			Help: "Number of click deltas in last sync batch",
 		},
 	)
+
+	BuildInfo = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "goshrt_build_info",
+			Help: "Build information of the running goshrt binary",
+		},
+		[]string{"version", "commit", "go_version"},
+	)
 )

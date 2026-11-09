@@ -184,3 +184,26 @@ func (h *Handler) DeleteURL(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
+
+// Liveness reports that the process is running. It must never depend on
+// downstream services, otherwise a database outage would restart the app.
+func (h *Handler) Liveness(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+}
+
+// Readiness reports whether the instance can serve traffic: Postgres and Redis
+// must both answer within the probe timeout.
+func (h *Handler) Readiness(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	if err := h.svc.Ready(ctx); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"status": "not ready",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+}
