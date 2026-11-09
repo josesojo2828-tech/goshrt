@@ -1,0 +1,27 @@
+# Binarios
+/bin/
+/goshrt
+*.exe
+*.test
+*.out
+coverage.html
+*.prof
+
+# Config local y secretos
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.bak
+*.backup
